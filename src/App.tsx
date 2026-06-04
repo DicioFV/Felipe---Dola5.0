@@ -19,6 +19,7 @@ import { UsersPage } from "./components/admin/UsersPage";
 import { FinancesPage } from "./components/financial/FinancesPage";
 import { InvestmentsPage } from "./components/financial/InvestmentsPage";
 import { LoansPage } from "./components/financial/LoansPage";
+import { SmartCalculatorPage } from "./components/financial/SmartCalculatorPage";
 import { AssistentePage } from "./components/dashboard/AssistentePage";
 import { RelatoriosPage } from "./components/dashboard/RelatoriosPage";
 import { FamiliaPage } from "./components/dashboard/FamiliaPage";
@@ -75,6 +76,16 @@ function MainAppContent() {
           </div>
 
           <div className="flex items-center gap-4">
+            {user.role === "SUPERADMIN" && (
+              <button
+                id="admin-header-btn"
+                onClick={() => setCurrentTab("/usuarios")}
+                className="px-3 py-1.5 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white text-[10px] font-bold uppercase tracking-wider rounded-lg flex items-center gap-1 shadow-lg shadow-purple-500/20 active:scale-95 transition-all cursor-pointer border border-purple-500/20"
+              >
+                <span>👑 Admin</span>
+              </button>
+            )}
+
             {/* Notifications Dropdown Component */}
             <NotificationsDropdown onNavigate={(href) => setCurrentTab(href)} />
 
@@ -107,6 +118,7 @@ function MainAppContent() {
           {currentTab === "/financeiro" ? <FinancesPage /> : null}
           {currentTab === "/investimentos" ? <InvestmentsPage /> : null}
           {currentTab === "/emprestimos" ? <LoansPage /> : null}
+          {currentTab === "/calculadora" ? <SmartCalculatorPage /> : null}
           {currentTab === "/assistente" ? <AssistentePage /> : null}
           {currentTab === "/relatorios" ? <RelatoriosPage /> : null}
           {currentTab === "/familia" ? <FamiliaPage /> : null}

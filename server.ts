@@ -232,6 +232,96 @@ app.get("/api/auth/setup", (req, res) => {
   res.json({ success: true, message: "Superadmin restaurado e ativo." });
 });
 
+// ---- SIGN UP / CADASTRO PÚBLICO ----
+app.post("/api/auth/register", (req, res) => {
+  const { name, email, password } = req.body;
+  if (!email) {
+    return res.status(400).json({ message: "E-mail é obrigatório." });
+  }
+
+  const db = readDb();
+  if (db.users.some(u => u.email.toLowerCase() === email.toLowerCase())) {
+    return res.status(400).json({ message: "E-mail já cadastrado." });
+  }
+
+  const defaultPassword = "123456";
+  const userPassword = password || defaultPassword;
+
+  const newUser = {
+    id: `user-${crypto.randomUUID()}`,
+    name: name || email.split("@")[0],
+    email: email.toLowerCase(),
+    password: hashPassword(userPassword),
+    role: "USER",
+    phone: "",
+    avatar: "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=150&h=150&q=80",
+    isActive: true,
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString()
+  };
+
+  db.users.push(newUser);
+  writeDb(db);
+
+  const token = generateToken(newUser);
+  const { password: _, ...safeUser } = newUser;
+
+  res.status(201).json({ token, user: safeUser, message: "Cadastro realizado com sucesso!" });
+});
+
+// ---- ESQUECI SENHA / RECUPERAÇÃO ----
+app.post("/api/auth/forgot-password", (req, res) => {
+  const { email } = req.body;
+  if (!email) {
+    return res.status(400).json({ message: "E-mail é obrigatório." });
+  }
+
+  const db = readDb();
+  const user = db.users.find(u => u.email.toLowerCase() === email.toLowerCase());
+
+  if (!user) {
+    return res.status(454).json({ message: "Este e-mail não está cadastrado em nosso sistema." });
+  }
+
+  const resetToken = crypto.randomBytes(32).toString("hex");
+  user.resetToken = resetToken;
+  user.resetTokenExpires = Date.now() + 3600000; // 1 hora de expiração
+  writeDb(db);
+
+  // Simula o link de redefinição
+  const resetLink = `/?token=${resetToken}`;
+
+  res.json({
+    success: true,
+    message: `Link de nova senha gerado e simulado!`,
+    resetLink,
+    email: user.email
+  });
+});
+
+// ---- REDEFINIR SENHA ----
+app.post("/api/auth/reset-password", (req, res) => {
+  const { token, password } = req.body;
+  if (!token || !password) {
+    return res.status(400).json({ message: "Token e nova senha são obrigatórios." });
+  }
+
+  const db = readDb();
+  const user = db.users.find(u => u.resetToken === token && u.resetTokenExpires > Date.now());
+
+  if (!user) {
+    return res.status(400).json({ message: "Token de redefinição inválido, expirado ou já utilizado." });
+  }
+
+  user.password = hashPassword(password);
+  user.resetToken = null;
+  user.resetTokenExpires = null;
+  user.updatedAt = new Date().toISOString();
+  writeDb(db);
+
+  res.json({ success: true, message: "Sua senha foi redefinida com sucesso. Faça login agora!" });
+});
+
 
 // ---- ROTAS GENÉRICAS DO SISTEMA (CRUD FÁCIL PARA FUTURA PORTABILIDADE) ----
 
@@ -1790,6 +1880,246 @@ app.post("/api/activity-logs/simulate-security-alert", authenticateToken, (req: 
   );
 
   res.json(log);
+});
+
+
+// ---- ROTAS DE PORTABILIDADE E BACKUP DE DADOS (IMPORT / EXPORT MULTI-FORMATO) ----
+
+app.get("/api/data/export", authenticateToken, (req: any, res) => {
+  try {
+    const db = readDb();
+    const userId = req.user.id;
+
+    const userTasks = (db.tasks || []).filter(item => item.userId === userId);
+    const userEvents = (db.events || []).filter(item => item.userId === userId);
+    const userAlarms = (db.alarms || []).filter(item => item.userId === userId);
+    const userNotes = (db.notes || []).filter(item => item.userId === userId);
+    const userFinances = (db.finances || []).filter(item => item.userId === userId);
+    const userInvestments = (db.investments || []).filter(item => item.userId === userId);
+    const userInvestmentGoals = (db.investmentGoals || []).filter(item => item.userId === userId);
+    const userLoans = (db.loans || []).filter(item => item.userId === userId);
+
+    const userHabits = (db.habits || []).filter(item => item.userId === userId);
+    const habitIds = userHabits.map(h => h.id);
+    const userHabitLogs = (db.habitLogs || []).filter(log => habitIds.includes(log.habitId));
+
+    const investmentIds = userInvestments.map(inv => inv.id);
+    const userInvestmentLogs = (db.investmentLogs || []).filter(log => investmentIds.includes(log.investmentId));
+
+    const loanIds = userLoans.map(l => l.id);
+    const userLoanPayments = (db.loanPayments || []).filter(pay => loanIds.includes(pay.loanId));
+    const userLoanStrategies = (db.loanStrategies || []).filter(strat => loanIds.includes(strat.loanId));
+
+    const exportData = {
+      user: {
+        id: req.user.id,
+        name: req.user.name,
+        email: req.user.email,
+        phone: req.user.phone
+      },
+      tasks: userTasks,
+      events: userEvents,
+      alarms: userAlarms,
+      notes: userNotes,
+      finances: userFinances,
+      habits: userHabits,
+      habitLogs: userHabitLogs,
+      investments: userInvestments,
+      investmentLogs: userInvestmentLogs,
+      investmentGoals: userInvestmentGoals,
+      loans: userLoans,
+      loanPayments: userLoanPayments,
+      loanStrategies: userLoanStrategies,
+      exportedAt: new Date().toISOString()
+    };
+
+    logActivity(
+      userId, 
+      "EXPORT", 
+      "System", 
+      null, 
+      "Backup e exportação completa dos dados do usuário executados nos formatos do sistema.", 
+      (req.headers["x-forwarded-for"] as string) || req.socket.remoteAddress
+    );
+
+    res.json(exportData);
+  } catch (err: any) {
+    console.error("Erro ao exportar dados:", err);
+    res.status(500).json({ message: "Erro interno ao processar exportação de dados." });
+  }
+});
+
+app.post("/api/data/import", authenticateToken, (req: any, res) => {
+  try {
+    const db = readDb();
+    const userId = req.user.id;
+    const importPayload = req.body;
+
+    if (!importPayload) {
+      return res.status(400).json({ message: "Dados de importação inválidos ou ausentes." });
+    }
+
+    // Limpa dados antigos do usuário logado (Overwrites backup)
+    db.tasks = (db.tasks || []).filter(item => item.userId !== userId);
+    db.events = (db.events || []).filter(item => item.userId !== userId);
+    db.alarms = (db.alarms || []).filter(item => item.userId !== userId);
+    db.notes = (db.notes || []).filter(item => item.userId !== userId);
+    db.finances = (db.finances || []).filter(item => item.userId !== userId);
+    db.investmentGoals = (db.investmentGoals || []).filter(item => item.userId !== userId);
+
+    const oldHabitIds = (db.habits || []).filter(h => h.userId === userId).map(h => h.id);
+    db.habits = (db.habits || []).filter(h => h.userId !== userId);
+    db.habitLogs = (db.habitLogs || []).filter(log => !oldHabitIds.includes(log.habitId));
+
+    const oldInvestmentIds = (db.investments || []).filter(i => i.userId === userId).map(i => i.id);
+    db.investments = (db.investments || []).filter(i => i.userId !== userId);
+    db.investmentLogs = (db.investmentLogs || []).filter(log => !oldInvestmentIds.includes(log.investmentId));
+
+    const oldLoanIds = (db.loans || []).filter(l => l.userId === userId).map(l => l.id);
+    db.loans = (db.loans || []).filter(l => l.userId !== userId);
+    db.loanPayments = (db.loanPayments || []).filter(pay => !oldLoanIds.includes(pay.loanId));
+    db.loanStrategies = (db.loanStrategies || []).filter(strat => !oldLoanIds.includes(strat.loanId));
+
+    let counts = {
+      tasks: 0,
+      events: 0,
+      alarms: 0,
+      notes: 0,
+      finances: 0,
+      habits: 0,
+      investments: 0,
+      loans: 0
+    };
+
+    // Populando novamente e garantindo reassociação segura com o userId logado
+    if (Array.isArray(importPayload.tasks)) {
+      importPayload.tasks.forEach((t: any) => {
+        t.userId = userId;
+        if (!t.id || typeof t.id !== "string") t.id = `task-${crypto.randomUUID()}`;
+        db.tasks.push(t);
+        counts.tasks++;
+      });
+    }
+
+    if (Array.isArray(importPayload.events)) {
+      importPayload.events.forEach((e: any) => {
+        e.userId = userId;
+        if (!e.id || typeof e.id !== "string") e.id = `event-${crypto.randomUUID()}`;
+        db.events.push(e);
+        counts.events++;
+      });
+    }
+
+    if (Array.isArray(importPayload.alarms)) {
+      importPayload.alarms.forEach((a: any) => {
+        a.userId = userId;
+        if (!a.id || typeof a.id !== "string") a.id = `alarm-${crypto.randomUUID()}`;
+        db.alarms.push(a);
+        counts.alarms++;
+      });
+    }
+
+    if (Array.isArray(importPayload.notes)) {
+      importPayload.notes.forEach((n: any) => {
+        n.userId = userId;
+        if (!n.id || typeof n.id !== "string") n.id = `note-${crypto.randomUUID()}`;
+        db.notes.push(n);
+        counts.notes++;
+      });
+    }
+
+    if (Array.isArray(importPayload.finances)) {
+      importPayload.finances.forEach((f: any) => {
+        f.userId = userId;
+        if (!f.id || typeof f.id !== "string") f.id = `finance-${crypto.randomUUID()}`;
+        db.finances.push(f);
+        counts.finances++;
+      });
+    }
+
+    if (Array.isArray(importPayload.investmentGoals)) {
+      importPayload.investmentGoals.forEach((g: any) => {
+        g.userId = userId;
+        if (!g.id || typeof g.id !== "string") g.id = `goal-${crypto.randomUUID()}`;
+        db.investmentGoals.push(g);
+      });
+    }
+
+    if (Array.isArray(importPayload.habits)) {
+      importPayload.habits.forEach((h: any) => {
+        h.userId = userId;
+        if (!h.id || typeof h.id !== "string") h.id = `habit-${crypto.randomUUID()}`;
+        db.habits.push(h);
+        counts.habits++;
+      });
+    }
+
+    if (Array.isArray(importPayload.habitLogs)) {
+      importPayload.habitLogs.forEach((l: any) => {
+        if (!l.id || typeof l.id !== "string") l.id = `log-${crypto.randomUUID()}`;
+        db.habitLogs.push(l);
+      });
+    }
+
+    if (Array.isArray(importPayload.investments)) {
+      importPayload.investments.forEach((i: any) => {
+        i.userId = userId;
+        if (!i.id || typeof i.id !== "string") i.id = `inv-${crypto.randomUUID()}`;
+        db.investments.push(i);
+        counts.investments++;
+      });
+    }
+
+    if (Array.isArray(importPayload.investmentLogs)) {
+      importPayload.investmentLogs.forEach((l: any) => {
+        if (!l.id || typeof l.id !== "string") l.id = `log-${crypto.randomUUID()}`;
+        db.investmentLogs.push(l);
+      });
+    }
+
+    if (Array.isArray(importPayload.loans)) {
+      importPayload.loans.forEach((l: any) => {
+        l.userId = userId;
+        if (!l.id || typeof l.id !== "string") l.id = `loan-${crypto.randomUUID()}`;
+        db.loans.push(l);
+        counts.loans++;
+      });
+    }
+
+    if (Array.isArray(importPayload.loanPayments)) {
+      importPayload.loanPayments.forEach((p: any) => {
+        if (!p.id || typeof p.id !== "string") p.id = `pay-${crypto.randomUUID()}`;
+        db.loanPayments.push(p);
+      });
+    }
+
+    if (Array.isArray(importPayload.loanStrategies)) {
+      importPayload.loanStrategies.forEach((s: any) => {
+        if (!s.id || typeof s.id !== "string") s.id = `strat-${crypto.randomUUID()}`;
+        db.loanStrategies.push(s);
+      });
+    }
+
+    writeDb(db);
+
+    logActivity(
+      userId,
+      "IMPORT",
+      "System",
+      null,
+      `Restauração completa de backup efetuada pelo executivo.`,
+      (req.headers["x-forwarded-for"] as string) || req.socket.remoteAddress
+    );
+
+    res.json({
+      success: true,
+      message: "Backup integrado e re-sincronizado com o Dola AI!",
+      counts
+    });
+  } catch (err: any) {
+    console.error("Erro ao importar dados:", err);
+    res.status(500).json({ message: "Erro interno no servidor ao restaurar os dados." });
+  }
 });
 
 

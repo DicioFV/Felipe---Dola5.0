@@ -549,13 +549,23 @@ export function OverviewPage({ setCurrentTab }: OverviewPageProps) {
             </p>
           </div>
 
-          <Button 
-            onClick={() => setIsCustomizerOpen(!isCustomizerOpen)}
-            className="bg-indigo-600 hover:bg-indigo-550 text-white font-bold text-2xs flex items-center gap-1.5 py-1.5 px-3.5 rounded-xl border-none shadow-md"
-          >
-            <Settings size={13} className="animate-spin-slow text-indigo-200" />
-            📊 Customizar Widgets
-          </Button>
+          <div className="flex items-center gap-2">
+            {user?.role === "SUPERADMIN" && (
+              <Button 
+                onClick={() => setCurrentTab && setCurrentTab("/usuarios")}
+                className="bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-550 hover:to-indigo-550 text-white font-bold text-2xs flex items-center gap-1.5 py-1.5 px-3.5 rounded-xl border-none shadow-md cursor-pointer"
+              >
+                <span>👑 Admin</span>
+              </Button>
+            )}
+            <Button 
+              onClick={() => setIsCustomizerOpen(!isCustomizerOpen)}
+              className="bg-[#21262D] hover:bg-[#30363D] text-[#C9D1D9] font-bold text-2xs flex items-center gap-1.5 py-1.5 px-3.5 rounded-xl border border-[#30363D] shadow-md cursor-pointer"
+            >
+              <Settings size={13} className="text-indigo-400" />
+              📊 Customizar Widgets
+            </Button>
+          </div>
         </div>
       </div>
 

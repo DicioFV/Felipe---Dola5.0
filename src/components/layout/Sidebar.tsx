@@ -26,6 +26,7 @@ export function Sidebar({ currentTab, setCurrentTab }: { currentTab: string, set
     { icon: "💰", label: "Financeiro", href: "/financeiro" },
     { icon: "📈", label: "Investimentos", href: "/investimentos" },
     { icon: "🏦", label: "Empréstimos", href: "/emprestimos" },
+    { icon: "🧮", label: "Calculadora Inteligente", href: "/calculadora" },
     
     // — ANÁLISE (separador visual)
     { separator: true, label: "Análise" },
@@ -41,7 +42,7 @@ export function Sidebar({ currentTab, setCurrentTab }: { currentTab: string, set
     // — GERENCIAMENTO ADM (Fase 2)
     ...(user.role === "SUPERADMIN" ? [
       { separator: true, label: "Administração" },
-      { icon: "👥", label: "Usuários", href: "/usuarios" }
+      { icon: "👑", label: "Admin", href: "/usuarios" }
     ] : [])
   ];
 
