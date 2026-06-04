@@ -58,14 +58,16 @@ export function LoginPage() {
   // Handle Login submission
   const handleLoginSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!email || !password) {
+    const cleanEmail = email.trim();
+    const cleanPassword = password.trim();
+    if (!cleanEmail || !cleanPassword) {
       toast("Por favor, preencha todos os campos.", "warning");
       return;
     }
 
     setLoading(true);
     try {
-      await login(email, password);
+      await login(cleanEmail, cleanPassword);
       toast("Login realizado com sucesso! Bem-vindo.", "success");
     } catch (err: any) {
       console.error(err);
@@ -78,12 +80,17 @@ export function LoginPage() {
   // Handle Signup submission
   const handleSignUpSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!signUpEmail) {
+    const cleanEmail = signUpEmail.trim();
+    const cleanPassword = signUpPassword.trim();
+    const cleanConfirm = signUpConfirmPassword.trim();
+    const cleanName = signUpName.trim();
+
+    if (!cleanEmail) {
       toast("O e-mail é obrigatório.", "warning");
       return;
     }
 
-    if (signUpPassword !== signUpConfirmPassword) {
+    if (cleanPassword !== cleanConfirm) {
       toast("As senhas informadas não coincidem.", "error");
       return;
     }
@@ -94,9 +101,9 @@ export function LoginPage() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          name: signUpName,
-          email: signUpEmail,
-          password: signUpPassword,
+          name: cleanName,
+          email: cleanEmail,
+          password: cleanPassword,
         }),
       });
 
@@ -108,7 +115,7 @@ export function LoginPage() {
       toast("Cadastro realizado com sucesso! Conectando...", "success");
       
       // Auto login
-      await login(signUpEmail, signUpPassword);
+      await login(cleanEmail, cleanPassword);
     } catch (err: any) {
       console.error(err);
       toast(err?.message || "Erro ao criar conta de acesso.", "error");
@@ -120,7 +127,8 @@ export function LoginPage() {
   // Handle Forgot/Recovery submission
   const handleForgotSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!forgotEmail) {
+    const cleanEmail = forgotEmail.trim();
+    if (!cleanEmail) {
       toast("Por favor, preencha seu e-mail.", "warning");
       return;
     }
@@ -130,7 +138,7 @@ export function LoginPage() {
       const res = await fetch("/api/auth/forgot-password", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: forgotEmail }),
+        body: JSON.stringify({ email: cleanEmail }),
       });
 
       const data = await res.json();

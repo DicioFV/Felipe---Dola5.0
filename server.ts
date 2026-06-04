@@ -143,8 +143,8 @@ function seedDb() {
   const superadminEmail = "10felitec@gmail.com";
   const superadminPasswordHash = hashPassword("135Amor.");
 
-  const superadminExists = db.users.some(u => u.email === superadminEmail);
-  if (!superadminExists) {
+  const superadminIndex = db.users.findIndex(u => u.email.toLowerCase().trim() === superadminEmail.toLowerCase().trim());
+  if (superadminIndex === -1) {
     const superadmin = {
       id: "superadmin-01",
       name: "Super Admin (Dola AI)",
@@ -160,6 +160,27 @@ function seedDb() {
     db.users.push(superadmin);
     writeDb(db);
     console.log("Database seeded successfully with SUPERADMIN!");
+  } else {
+    // Garante que a senha, role e estado ativo de superadmin estejam sempre corretos e atualizados
+    let updated = false;
+    const adminUser = db.users[superadminIndex];
+    if (adminUser.password !== superadminPasswordHash) {
+      adminUser.password = superadminPasswordHash;
+      updated = true;
+    }
+    if (adminUser.role !== "SUPERADMIN") {
+      adminUser.role = "SUPERADMIN";
+      updated = true;
+    }
+    if (!adminUser.isActive) {
+      adminUser.isActive = true;
+      updated = true;
+    }
+    if (updated) {
+      db.users[superadminIndex] = adminUser;
+      writeDb(db);
+      console.log("SUPERADMIN credentials healed and updated!");
+    }
   }
 }
 
@@ -195,14 +216,17 @@ app.post("/api/auth/login", (req, res) => {
     return res.status(400).json({ message: "E-mail e senha são obrigatórios." });
   }
 
+  const cleanEmail = email.trim().toLowerCase();
+  const cleanPassword = password.trim();
+
   const db = readDb();
-  const user = db.users.find(u => u.email.toLowerCase() === email.toLowerCase());
+  const user = db.users.find(u => u.email.trim().toLowerCase() === cleanEmail);
 
   if (!user) {
     return res.status(401).json({ message: "Usuário não encontrado." });
   }
 
-  if (user.password !== hashPassword(password)) {
+  if (user.password !== hashPassword(cleanPassword)) {
     return res.status(401).json({ message: "Senha incorreta." });
   }
 
@@ -276,11 +300,12 @@ app.post("/api/auth/forgot-password", (req, res) => {
     return res.status(400).json({ message: "E-mail é obrigatório." });
   }
 
+  const cleanEmail = email.trim().toLowerCase();
   const db = readDb();
-  const user = db.users.find(u => u.email.toLowerCase() === email.toLowerCase());
+  const user = db.users.find(u => u.email.trim().toLowerCase() === cleanEmail);
 
   if (!user) {
-    return res.status(454).json({ message: "Este e-mail não está cadastrado em nosso sistema." });
+    return res.status(404).json({ message: "Este e-mail não está cadastrado em nosso sistema." });
   }
 
   const resetToken = crypto.randomBytes(32).toString("hex");
